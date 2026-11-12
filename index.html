@@ -2,10 +2,234 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>My Website</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>英文直訳＆セルフ添削チェッカー</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --border: #cbd5e1;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        header h1 {
+            font-size: 1.8rem;
+            margin-bottom: 8px;
+        }
+        header p {
+            color: #64748b;
+            font-size: 0.95rem;
+        }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        input[type="password"], textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 1rem;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        .api-note {
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-top: 6px;
+        }
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 12px;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+        button:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+        }
+        .result-section {
+            display: none;
+        }
+        .result-box {
+            background-color: #f1f5f9;
+            border-left: 4px solid var(--primary);
+            padding: 16px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            white-space: pre-wrap;
+        }
+        .result-box.warning {
+            border-left-color: #eab308;
+            background-color: #fefce8;
+        }
+        .error-msg {
+            color: #dc2626;
+            background-color: #fef2f2;
+            border: 1px solid #fecaca;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 12px;
+            display: none;
+        }
+    </style>
 </head>
 <body>
-    <h1>Hello, GitHub Pages!</h1>
-    <p>GitHub Pagesを使ってWebサイトを公開しました。</p>
-</body>
-</html>
+
+<div class="container">
+    <header>
+        <h1>英文直訳＆セルフ添削チェッカー</h1>
+        <p>あなたの書いた英文を「補完なし」で直訳します。日本語の違和感から自分の英文を直してみましょう。</p>
+    </header>
+
+    <!-- APIキー設定エリア -->
+    <div class="card">
+        <label for="apiKey">Gemini APIキー</label>
+        <input type="password" id="apiKey" placeholder="AIzaSy...">
+        <div class="api-note">
+            ※APIキーはお使いのブラウザ（localStorage）にのみ保存され、外部サーバーには送信されません。<br>
+            ※キーは <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a> で無料取得できます。
+        </div>
+    </div>
+
+    <!-- 英文入力エリア -->
+    <div class="card">
+        <label for="englishInput">チェックしたい英文を入力してください</label>
+        <textarea id="englishInput" placeholder="例: I go to park yesterday. It was very fun to me."></textarea>
+        <button id="checkBtn" onclick="checkEnglish()">直訳とチェックを実行する</button>
+        <div id="errorMsg" class="error-msg"></div>
+    </div>
+
+    <!-- 結果表示エリア -->
+    <div id="resultSection" class="card result-section">
+        <label>1. 直訳（内容補完・修正なし）</label>
+        <div id="literalOutput" class="result-box"></div>
+
+        <label>2. 不自然な部分の指摘</label>
+        <div id="feedbackOutput" class="result-box warning"></div>
+    </div>
+</div>
+
+<script>
+    // ページ読み込み時に保存済みのAPIキーを復元
+    window.addEventListener('DOMContentLoaded', () => {
+        const savedKey = localStorage.getItem('gemini_api_key');
+        if (savedKey) {
+            document.getElementById('apiKey').value = savedKey;
+        }
+    });
+
+    async function checkEnglish() {
+        const apiKey = document.getElementById('apiKey').value.trim();
+        const englishText = document.getElementById('englishInput').value.trim();
+        const checkBtn = document.getElementById('checkBtn');
+        const errorMsg = document.getElementById('errorMsg');
+        const resultSection = document.getElementById('resultSection');
+        const literalOutput = document.getElementById('literalOutput');
+        const feedbackOutput = document.getElementById('feedbackOutput');
+
+        // エラー表示リセット
+        errorMsg.style.display = 'none';
+
+        if (!apiKey) {
+            showError('Gemini APIキーを入力してください。');
+            return;
+        }
+        if (!englishText) {
+            showError('チェックする英文を入力してください。');
+            return;
+        }
+
+        // APIキーをブラウザに保存
+        localStorage.setItem('gemini_api_key', apiKey);
+
+        // UIをローディング状態にする
+        checkBtn.disabled = true;
+        checkBtn.textContent = 'AIが分析中...';
+        resultSection.style.display = 'none';
+
+        // AIへの厳格な指示（システムプロンプト）
+        const systemInstruction = `あなたは英語学習者向けの厳格な直訳・添削アシスタントです。
+ユーザーから入力された英文に対し、以下の2つの項目のみをJSON形式で出力してください。
+
+1. "literal_translation"（直訳）:
+- 入力された英文の単語・文法構造・時制・冠詞の有無などをそのまま反映した直訳の日本語を出力してください。
+- 文脈からの推測、意味の補完、自然な日本語への意訳、文法ミスの自動修正は**一切行わないでください**。
+- 英文が文法的に間違っている場合は、その間違いがそのまま不自然な日本語として表れるように訳してください（例："I go to park yesterday." → 「私は昨日公園へ行く（現在形）。」や「私は昨日公園へ行く。」など、時制や冠詞の欠落がわかる訳にする）。
+
+2. "unnatural_points"（不自然な部分の指摘）:
+- 入力された英文の文法的な誤り、不自然な単語選択、冠詞・前置詞の抜け、時制の不一致などを箇条書きで指摘してください。
+- 学習者が自分で考えて直せるよう、完成された模範解答の全文をいきなり提示するのではなく、「どの部分の何が不自然か」「どう直すべきかのヒント」を中心にわかりやすく解説してください。`;
+
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+        const payload = {
+            system_instruction: {
+                parts: [{ text: systemInstruction }]
+            },
+            contents: [{
+                parts: [{ text: englishText }]
+            }],
+            generationConfig: {
+                temperature: 0.2, // ブレを抑えて忠実に直訳させるため低めに設定
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: "OBJECT",
+                    properties: {
+                        literal_translation: {
+                            type: "STRING",
+                            description: "内容補完や意訳を一切しない直訳"
+                        },
+                        unnatural_points: {
+                            type: "STRING",
+                            description: "英文の不自然な部分の指摘と修正のヒント"
+                        }
+                    },
+                    required: ["literal_translation", "unnatural_points"]
+                }
+            }
+        };
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
