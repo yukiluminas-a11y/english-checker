@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>英文直訳＆セルフ添削チェッカー（APIキー直書き版）</title>
+    <title>英文直訳＆セルフ添削チェッカー</title>
     <style>
         :root {
             --primary: #2563eb;
@@ -41,13 +41,15 @@
             font-weight: bold;
             margin-bottom: 8px;
         }
-        textarea {
+        input[type="password"], textarea {
             width: 100%;
             padding: 12px;
             border: 1px solid var(--border);
             border-radius: 6px;
             font-size: 1rem;
             box-sizing: border-box;
+        }
+        textarea {
             min-height: 120px;
         }
         button {
@@ -64,6 +66,10 @@
         }
         button:hover {
             background-color: var(--primary-hover);
+        }
+        button:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
         }
         .result-section {
             display: none;
@@ -89,6 +95,11 @@
             margin-top: 12px;
             display: none;
         }
+        .note {
+            font-size: 0.85rem;
+            color: #64748b;
+            margin-top: 4px;
+        }
     </style>
 </head>
 <body>
@@ -96,8 +107,14 @@
 <div class="container">
     <header>
         <h1>英文直訳＆セルフ添削チェッカー</h1>
-        <p>英文を入力するだけで、補完なしの直訳と不自然な箇所の指摘を表示します。</p>
+        <p>入力された英文を「補完なし」で直訳し、不自然な部分を指摘します。</p>
     </header>
+
+    <div class="card">
+        <label for="apiKey">Gemini APIキー</label>
+        <input type="password" id="apiKey" placeholder="AIzaSy...">
+        <div class="note">※入力されたキーはブラウザ内（localStorage）にのみ保存され、外部に送信されることはありません。</div>
+    </div>
 
     <div class="card">
         <label for="englishInput">チェックしたい英文を入力</label>
@@ -116,10 +133,16 @@
 </div>
 
 <script>
+    // ページ読み込み時に保存されていたAPIキーを復元
+    window.addEventListener('DOMContentLoaded', () => {
+        const savedKey = localStorage.getItem('gemini_api_key');
+        if (savedKey) {
+            document.getElementById('apiKey').value = savedKey;
+        }
+    });
+
     async function checkEnglish() {
-        // ★ここにあなたのAPIキーを直接記述します
-        const apiKey = "ここにあなたのAPIキーを貼り付けてください";
-        
+        const apiKey = document.getElementById('apiKey').value.trim();
         const englishText = document.getElementById('englishInput').value.trim();
         const checkBtn = document.getElementById('checkBtn');
         const errorMsg = document.getElementById('errorMsg');
@@ -128,10 +151,18 @@
         const feedbackOutput = document.getElementById('feedbackOutput');
 
         errorMsg.style.display = 'none';
+
+        if (!apiKey) {
+            showError('APIキーを入力してください。');
+            return;
+        }
         if (!englishText) {
             showError('英文を入力してください。');
             return;
         }
+
+        // APIキーをブラウザに保存（次回から入力を省略）
+        localStorage.setItem('gemini_api_key', apiKey);
 
         checkBtn.disabled = true;
         checkBtn.textContent = '分析中...';
